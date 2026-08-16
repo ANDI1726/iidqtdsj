@@ -238,17 +238,29 @@
 
   .recent-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
   .recent-item{
-    display:flex; align-items:center; justify-content:space-between;
+    display:flex; align-items:center; gap:10px;
     background:rgba(0,0,0,.18);
     border:1px solid rgba(201,161,91,.15);
     border-radius:10px;
-    padding:11px 14px;
+    padding:11px 10px 11px 14px;
+    cursor:pointer;
+    transition: background .15s, border-color .15s;
+  }
+  .recent-item:hover,
+  .recent-item:focus-visible{
+    background:rgba(0,0,0,.3);
+    border-color:rgba(201,161,91,.4);
+  }
+  .recent-item.is-disabled{
+    cursor:default;
+    opacity:.55;
   }
   .recent-name{
+    flex:1; min-width:0;
     font-family:'Fraunces',serif;
     font-size:15.5px;
     color:var(--cream);
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:12px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
   .recent-count{
     font-family:'Space Mono',monospace;
@@ -258,6 +270,40 @@
     padding:3px 9px;
     border-radius:99px;
     white-space:nowrap;
+    flex-shrink:0;
+  }
+  .recent-delete{
+    flex-shrink:0;
+    width:24px; height:24px;
+    display:flex; align-items:center; justify-content:center;
+    background:transparent; border:none; padding:0;
+    font-size:17px; line-height:1;
+    color:var(--cream-dim);
+    border-radius:50%;
+  }
+  .recent-delete:hover{ color:var(--rust); background:rgba(184,83,46,.15); }
+
+  .recent-footer{
+    display:flex; justify-content:flex-end;
+    margin-top:14px;
+  }
+  .btn-reset{
+    background:transparent;
+    border:1px solid rgba(184,83,46,.4);
+    color:var(--rust);
+    font-family:'Inter',sans-serif;
+    font-size:12.5px;
+    font-weight:600;
+    padding:8px 14px;
+    border-radius:8px;
+    cursor:pointer;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .btn-reset:hover{ background:rgba(184,83,46,.12); }
+  .btn-reset.confirming{
+    background:var(--rust);
+    border-color:var(--rust);
+    color:var(--cream);
   }
   .recent-empty{
     color:var(--cream-dim);
@@ -344,6 +390,9 @@
   <div class="recent">
     <h2>Pemutaran Terbaru</h2>
     <ul class="recent-list" id="recentList"></ul>
+    <div class="recent-footer">
+      <button type="button" class="btn-reset" id="resetBtn">Reset Semua Data</button>
+    </div>
   </div>
 </div>
 
@@ -379,6 +428,8 @@
   const platter = document.getElementById('platter');
   const tonearm = document.getElementById('tonearm');
   const recentList = document.getElementById('recentList');
+  const resetBtn = document.getElementById('resetBtn');
+  const DEFAULT_TITLE = document.title;
 
   function formatTime(s){
     const h = Math.floor(s/3600);
@@ -399,6 +450,15 @@
 
   function tick(){
     timerText.textContent = formatTime(elapsedSeconds());
+  }
+
+  function updateDocumentTitle(){
+    if(state.playing){
+      const name = albumInput.value.trim() || 'Album';
+      document.title = `▶ ${name} — Sisi ${state.side} · Runout`;
+    } else {
+      document.title = DEFAULT_TITLE;
+    }
   }
 
   function startTimer(){
@@ -462,6 +522,7 @@
       tonearm.classList.add('down');
       setSideVisual(state.side);
       startTimer();
+      updateDocumentTitle();
     }
   }
 
@@ -493,7 +554,10 @@
 
     state.recent.forEach(entry => {
       const li = document.createElement('li');
-      li.className = 'recent-item';
+      li.className = 'recent-item' + (state.playing ? ' is-disabled' : '');
+      li.tabIndex = state.playing ? -1 : 0;
+      li.setAttribute('role', 'button');
+      li.setAttribute('aria-label', `Isi ulang "${entry.name}" ke kolom nama album`);
 
       const nameSpan = document.createElement('span');
       nameSpan.className = 'recent-name';
@@ -503,10 +567,40 @@
       countSpan.className = 'recent-count';
       countSpan.textContent = '×' + entry.count;
 
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'recent-delete';
+      deleteBtn.setAttribute('aria-label', `Hapus "${entry.name}" dari riwayat`);
+      deleteBtn.textContent = '×';
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); // jangan sampai memicu klik "putar ulang" pada li
+        deleteRecentEntry(entry.name);
+      });
+
+      const replay = () => {
+        if(state.playing) return; // input sedang terkunci, tidak bisa diisi
+        albumInput.value = entry.name;
+        albumInput.focus();
+      };
+      li.addEventListener('click', replay);
+      li.addEventListener('keydown', (e) => {
+        if((e.key === 'Enter' || e.key === ' ') && !state.playing){
+          e.preventDefault();
+          replay();
+        }
+      });
+
       li.appendChild(nameSpan);
       li.appendChild(countSpan);
+      li.appendChild(deleteBtn);
       recentList.appendChild(li);
     });
+  }
+
+  function deleteRecentEntry(name){
+    state.recent = state.recent.filter(r => r.name !== name);
+    renderRecent();
+    saveState();
   }
 
   function setSideVisual(side){
@@ -538,6 +632,7 @@
 
     logPlay(name); // logPlay() sudah memanggil saveState()
     startTimer();
+    updateDocumentTitle();
     saveState();
   }
 
@@ -548,6 +643,7 @@
     setSideVisual(state.side);
     logPlay(albumInput.value.trim()); // logPlay() sudah memanggil saveState()
     startTimer();
+    updateDocumentTitle();
     saveState();
   }
 
@@ -568,6 +664,7 @@
     platter.classList.remove('spinning');
     tonearm.classList.remove('down');
     albumInput.focus();
+    updateDocumentTitle();
     saveState();
   }
 
@@ -576,6 +673,29 @@
   finishBtn.addEventListener('click', finishPlay);
   albumInput.addEventListener('keydown', (e) => {
     if(e.key === 'Enter' && !state.playing) beginPlay();
+  });
+
+  let resetConfirmTimeout = null;
+  resetBtn.addEventListener('click', () => {
+    if(!resetBtn.classList.contains('confirming')){
+      // Klik pertama: minta konfirmasi, jangan langsung hapus.
+      resetBtn.classList.add('confirming');
+      resetBtn.textContent = 'Yakin? Klik lagi';
+      resetConfirmTimeout = setTimeout(() => {
+        resetBtn.classList.remove('confirming');
+        resetBtn.textContent = 'Reset Semua Data';
+      }, 3000);
+      return;
+    }
+    // Klik kedua dalam jendela waktu: benar-benar hapus semua data.
+    clearTimeout(resetConfirmTimeout);
+    resetBtn.classList.remove('confirming');
+    resetBtn.textContent = 'Reset Semua Data';
+
+    if(state.playing) finishPlay();
+    state.recent = [];
+    renderRecent();
+    try{ localStorage.removeItem(STORAGE_KEY); } catch(err){ /* abaikan */ }
   });
 
   loadState();
