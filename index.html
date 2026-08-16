@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Runout — Pelacak Sisi Piringan Hitam</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --wood-dark:#211209;
+    --wood:#3a2214;
+    --wood-mid:#4a2c1a;
+    --wood-light:#6b4229;
+    --amber:#dd9c3f;
+    --amber-dim:#a86f2a;
+    --rust:#b8532e;
+    --brass:#c9a15b;
+    --cream:#f4e6c8;
+    --cream-dim:#cdb694;
+    --vinyl:#1a1512;
+    --vinyl-groove:#100c0a;
+    --shadow:rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    min-height:100vh;
+    font-family:'Inter',sans-serif;
+    color:var(--cream);
+    background:
+      radial-gradient(ellipse at 20% -10%, rgba(221,156,63,.10), transparent 45%),
+      radial-gradient(ellipse at 100% 110%, rgba(184,83,46,.12), transparent 50%),
+      repeating-linear-gradient(90deg, rgba(0,0,0,0.10) 0px, rgba(0,0,0,0.10) 1px, transparent 1px, transparent 26px),
+      linear-gradient(160deg, var(--wood-mid), var(--wood-dark) 70%);
+    display:flex;
+    justify-content:center;
+    padding:48px 20px 64px;
+  }
+  .app{ width:100%; max-width:620px; }
+
+  .eyebrow{
+    font-family:'Space Mono',monospace;
+    font-size:11px;
+    letter-spacing:.28em;
+    text-transform:uppercase;
+    color:var(--amber);
+    text-align:center;
+    margin:0 0 6px;
+  }
+  h1.title{
+    font-family:'Fraunces',serif;
+    font-optical-sizing:auto;
+    font-weight:600;
+    font-size:clamp(30px,6vw,42px);
+    text-align:center;
+    margin:0 0 6px;
+    color:var(--cream);
+    letter-spacing:.01em;
+  }
+  .subtitle{
+    text-align:center;
+    color:var(--cream-dim);
+    font-size:14px;
+    margin:0 0 34px;
+  }
+
+  /* ===== Now playing card ===== */
+  .deck-card{
+    background:
+      linear-gradient(160deg, rgba(255,255,255,.03), rgba(0,0,0,.15)),
+      var(--wood-light);
+    border:1px solid rgba(201,161,91,.25);
+    border-radius:18px;
+    padding:28px;
+    box-shadow: 0 20px 50px var(--shadow), inset 0 1px 0 rgba(255,255,255,.06);
+    display:flex;
+    gap:28px;
+    align-items:center;
+    position:relative;
+    overflow:hidden;
+  }
+  .deck-card::before{
+    content:"";
+    position:absolute; inset:0;
+    background:repeating-linear-gradient(90deg, rgba(0,0,0,.08) 0 2px, transparent 2px 30px);
+    pointer-events:none;
+    opacity:.5;
+  }
+
+  /* Platter */
+  .platter-wrap{
+    position:relative;
+    width:150px;
+    min-width:150px;
+    height:150px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .platter{
+    width:100%;
+    height:100%;
+    animation: spin 2.6s linear infinite;
+    animation-play-state:paused;
+    transform-origin:50% 50%;
+    filter: drop-shadow(0 8px 14px rgba(0,0,0,.55));
+  }
+  .platter.spinning{ animation-play-state:running; }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+
+  .tonearm{
+    position:absolute;
+    top:-14px; right:-6px;
+    width:70px; height:70px;
+    transform-origin: 82% 12%;
+    transform: rotate(-24deg);
+    transition: transform .6s cubic-bezier(.4,1.4,.4,1);
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,.5));
+  }
+  .tonearm.down{ transform: rotate(6deg); }
+
+  /* Info column */
+  .info{ flex:1; min-width:0; }
+  .field-label{
+    font-family:'Space Mono',monospace;
+    font-size:10px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:var(--brass);
+    display:block;
+    margin-bottom:6px;
+  }
+  input.album-input{
+    width:100%;
+    background:rgba(0,0,0,.25);
+    border:1px solid rgba(201,161,91,.35);
+    border-radius:8px;
+    padding:10px 12px;
+    font-family:'Fraunces',serif;
+    font-size:18px;
+    color:var(--cream);
+    outline:none;
+    margin-bottom:16px;
+    transition:border-color .2s, background .2s;
+  }
+  input.album-input::placeholder{ color:rgba(244,230,200,.35); font-family:'Inter',sans-serif; font-size:15px;}
+  input.album-input:focus{ border-color:var(--amber); background:rgba(0,0,0,.35); }
+  input.album-input:disabled{ color:var(--cream); opacity:.85; border-color:rgba(201,161,91,.18); }
+
+  .row-mid{ display:flex; align-items:center; gap:20px; margin-bottom:18px; flex-wrap:wrap; }
+
+  /* Flip label */
+  .flip-scene{ width:96px; height:64px; perspective:600px; }
+  .flip-card{
+    position:relative; width:100%; height:100%;
+    transform-style:preserve-3d;
+    transition: transform .55s cubic-bezier(.5,.1,.2,1.2);
+  }
+  .flip-card.flipped{ transform: rotateY(180deg); }
+  .flip-face{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    border-radius:10px;
+    backface-visibility:hidden;
+    font-family:'Fraunces',serif;
+    font-weight:700;
+    border:1px solid rgba(255,255,255,.12);
+  }
+  .flip-face .big{ font-size:26px; line-height:1; color:#1c1410; }
+  .flip-face .small{ font-family:'Space Mono',monospace; font-size:9px; letter-spacing:.16em; margin-top:3px; color:#1c1410cc; }
+  .face-a{ background: linear-gradient(160deg, var(--amber), var(--amber-dim)); }
+  .face-b{ background: linear-gradient(160deg, var(--brass), #9c7a3f); transform: rotateY(180deg); }
+
+  .timer-wrap{ text-align:left; }
+  .timer{
+    font-family:'Space Mono',monospace;
+    font-size:28px;
+    font-weight:700;
+    color:var(--cream);
+    letter-spacing:.02em;
+  }
+  .timer-label{
+    font-family:'Space Mono',monospace;
+    font-size:10px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--cream-dim);
+  }
+
+  /* Controls */
+  .controls{ display:flex; gap:10px; flex-wrap:wrap; }
+  button{
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:13.5px;
+    padding:10px 18px;
+    border-radius:8px;
+    border:1px solid transparent;
+    cursor:pointer;
+    transition: transform .12s ease, filter .15s ease, opacity .15s ease;
+    letter-spacing:.01em;
+  }
+  button:active{ transform: translateY(1px) scale(.98); }
+  button:disabled{ opacity:.35; cursor:not-allowed; }
+
+  .btn-play{ background: linear-gradient(160deg, var(--rust), #8f3c22); color:var(--cream); }
+  .btn-play:not(:disabled):hover{ filter:brightness(1.12); }
+
+  .btn-flip{ background: transparent; border-color:var(--brass); color:var(--brass); }
+  .btn-flip:not(:disabled):hover{ background:rgba(201,161,91,.12); }
+
+  .btn-finish{ background: transparent; border-color:rgba(244,230,200,.3); color:var(--cream-dim); }
+  .btn-finish:not(:disabled):hover{ background:rgba(244,230,200,.08); color:var(--cream); }
+
+  /* ===== Recent plays ===== */
+  .recent{ margin-top:34px; }
+  .recent h2{
+    font-family:'Space Mono',monospace;
+    font-size:11px;
+    letter-spacing:.2em;
+    text-transform:uppercase;
+    color:var(--brass);
+    margin:0 0 12px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .recent h2::after{ content:""; flex:1; height:1px; background:linear-gradient(90deg, rgba(201,161,91,.4), transparent); }
+
+  /* Fokus keyboard yang jelas untuk semua elemen interaktif */
+  input:focus-visible,
+  button:focus-visible{
+    outline:2px solid var(--amber);
+    outline-offset:2px;
+  }
+  input.album-input:focus-visible{
+    border-color:var(--amber);
+  }
+
+  .recent-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+  .recent-item{
+    display:flex; align-items:center; justify-content:space-between;
+    background:rgba(0,0,0,.18);
+    border:1px solid rgba(201,161,91,.15);
+    border-radius:10px;
+    padding:11px 14px;
+  }
+  .recent-name{
+    font-family:'Fraunces',serif;
+    font-size:15.5px;
+    color:var(--cream);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:12px;
+  }
+  .recent-count{
+    font-family:'Space Mono',monospace;
+    font-size:12px;
+    color:var(--wood-dark);
+    background:var(--amber);
+    padding:3px 9px;
+    border-radius:99px;
+    white-space:nowrap;
+  }
+  .recent-empty{
+    color:var(--cream-dim);
+    font-size:13.5px;
+    text-align:center;
+    padding:18px 0;
+    border:1px dashed rgba(201,161,91,.25);
+    border-radius:10px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .platter{ animation: none; }
+    .platter.spinning{ animation: none; }
+    .tonearm{ transition: none; }
+    .flip-card{ transition: none; }
+    button, input{ transition: none; }
+  }
+
+  @media (max-width:480px){
+    .deck-card{ flex-direction:column; align-items:stretch; text-align:left; padding:22px; }
+    .platter-wrap{ align-self:center; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <p class="eyebrow">Alur akhir, sisi berikutnya</p>
+  <h1 class="title">Runout</h1>
+  <p class="subtitle">Pelacak sisi piringan hitam — tahu kapan alur akhir tiba, sebelum jarum ke sana.</p>
+
+  <div class="deck-card">
+    <div class="platter-wrap">
+      <svg class="platter" id="platter" viewBox="0 0 150 150">
+        <circle cx="75" cy="75" r="72" fill="#0f0b09"/>
+        <circle cx="75" cy="75" r="72" fill="none" stroke="#000" stroke-width="1" opacity=".4"/>
+        <g stroke="#000" opacity=".35">
+          <circle cx="75" cy="75" r="66" fill="none" stroke-width="1.1"/>
+          <circle cx="75" cy="75" r="58" fill="none" stroke-width="1.1"/>
+          <circle cx="75" cy="75" r="50" fill="none" stroke-width="1.1"/>
+          <circle cx="75" cy="75" r="43" fill="none" stroke-width="1.1"/>
+          <circle cx="75" cy="75" r="37" fill="none" stroke-width="1.1"/>
+        </g>
+        <circle cx="75" cy="75" r="30" fill="#dd9c3f"/>
+        <circle cx="75" cy="75" r="30" fill="none" stroke="#4a2c1a" stroke-width="1"/>
+        <circle cx="75" cy="75" r="3.2" fill="#211209"/>
+        <path d="M75 45 A30 30 0 0 1 105 75" fill="none" stroke="#fff" stroke-width="1" opacity=".18"/>
+      </svg>
+      <svg class="tonearm" id="tonearm" viewBox="0 0 70 70">
+        <circle cx="58" cy="10" r="7" fill="#c9a15b"/>
+        <rect x="20" y="7" width="38" height="4" rx="2" fill="#c9a15b" transform="rotate(4 58 10)"/>
+        <rect x="14" y="52" width="16" height="6" rx="2" fill="#8f6a35" transform="rotate(30 20 55)"/>
+      </svg>
+    </div>
+
+    <div class="info">
+      <label class="field-label" for="albumInput">Nama Album</label>
+      <input id="albumInput" class="album-input" type="text" placeholder="Ketik nama album…" maxlength="60" autocomplete="new-password" spellcheck="false">
+
+      <div class="row-mid">
+        <div class="flip-scene">
+          <div class="flip-card" id="flipCard">
+            <div class="flip-face face-a">
+              <span class="big">A</span><span class="small">SISI A</span>
+            </div>
+            <div class="flip-face face-b">
+              <span class="big">B</span><span class="small">SISI B</span>
+            </div>
+          </div>
+        </div>
+        <div class="timer-wrap">
+          <div class="timer" id="timerText">0:00</div>
+          <div class="timer-label">Waktu berjalan</div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="btn-play" id="playBtn">▶ Play</button>
+        <button class="btn-flip" id="flipBtn" disabled>⤾ Flip</button>
+        <button class="btn-finish" id="finishBtn" disabled>Selesai</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="recent">
+    <h2>Pemutaran Terbaru</h2>
+    <ul class="recent-list" id="recentList"></ul>
+  </div>
+</div>
+
+
+<script>
+  const MAX_RECENT = 5; // batas jumlah album yang disimpan di daftar
+  const STORAGE_KEY = 'runout:v1'; // kunci penyimpanan di localStorage
+
+  // Data contoh — hanya dipakai SEKALI di kunjungan pertama (saat belum ada
+  // data tersimpan sama sekali). Setelah itu, daftar mengikuti pemutaran asli.
+  const SEED_RECENT = [
+    { name: 'Kind of Blue — Miles Davis', count: 5 },
+    { name: 'Rumours — Fleetwood Mac', count: 4 },
+    { name: 'Abbey Road — The Beatles', count: 4 },
+    { name: 'Blue Train — John Coltrane', count: 3 },
+    { name: 'Songs in the Key of Life — Stevie Wonder', count: 3 }
+  ];
+
+  const state = {
+    side: 'A',
+    playing: false,
+    startTimestamp: null, // waktu (ms) saat sisi ini mulai diputar/dibalik
+    timerId: null,
+    recent: []
+  };
+
+  const albumInput = document.getElementById('albumInput');
+  const playBtn = document.getElementById('playBtn');
+  const flipBtn = document.getElementById('flipBtn');
+  const finishBtn = document.getElementById('finishBtn');
+  const timerText = document.getElementById('timerText');
+  const flipCard = document.getElementById('flipCard');
+  const platter = document.getElementById('platter');
+  const tonearm = document.getElementById('tonearm');
+  const recentList = document.getElementById('recentList');
+
+  function formatTime(s){
+    const h = Math.floor(s/3600);
+    const m = Math.floor((s%3600)/60);
+    const sec = s % 60;
+    if(h > 0){
+      return h + ':' + String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+    }
+    return m + ':' + String(sec).padStart(2,'0');
+  }
+
+  // Elapsed dihitung dari selisih waktu asli (timestamp), bukan counter interval.
+  // Ini yang membuat timer tetap akurat setelah halaman di-refresh.
+  function elapsedSeconds(){
+    if(!state.playing || !state.startTimestamp) return 0;
+    return Math.max(0, Math.floor((Date.now() - state.startTimestamp) / 1000));
+  }
+
+  function tick(){
+    timerText.textContent = formatTime(elapsedSeconds());
+  }
+
+  function startTimer(){
+    stopTimer();
+    tick();
+    state.timerId = setInterval(tick, 1000);
+  }
+  function stopTimer(){
+    if(state.timerId){ clearInterval(state.timerId); state.timerId = null; }
+  }
+
+  // ===== Persistensi (localStorage) =====
+  // localStorage bisa gagal (mode privat Safari, storage penuh, dsb),
+  // jadi semua akses dibungkus try/catch supaya aplikasi tidak macet.
+  function saveState(){
+    try{
+      const payload = {
+        recent: state.recent,
+        active: state.playing ? {
+          name: albumInput.value,
+          side: state.side,
+          startTimestamp: state.startTimestamp
+        } : null
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    } catch(err){
+      console.warn('Runout: gagal menyimpan data ke localStorage.', err);
+    }
+  }
+
+  function loadState(){
+    let saved = null;
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw) saved = JSON.parse(raw);
+    } catch(err){
+      console.warn('Runout: data tersimpan rusak, memakai data contoh.', err);
+      saved = null;
+    }
+
+    if(!saved){
+      // Kunjungan pertama / belum pernah ada data — tampilkan contoh.
+      state.recent = SEED_RECENT.slice();
+      return;
+    }
+
+    state.recent = Array.isArray(saved.recent) ? saved.recent.slice(0, MAX_RECENT) : [];
+
+    if(saved.active && saved.active.name && saved.active.startTimestamp){
+      // Ada sesi yang masih berjalan sebelum refresh — lanjutkan.
+      state.playing = true;
+      state.side = saved.active.side === 'B' ? 'B' : 'A';
+      state.startTimestamp = saved.active.startTimestamp;
+
+      albumInput.value = saved.active.name;
+      albumInput.disabled = true;
+      playBtn.disabled = true;
+      flipBtn.disabled = false;
+      finishBtn.disabled = false;
+      platter.classList.add('spinning');
+      tonearm.classList.add('down');
+      setSideVisual(state.side);
+      startTimer();
+    }
+  }
+
+
+  function logPlay(name){
+    const existingIdx = state.recent.findIndex(r => r.name.toLowerCase() === name.toLowerCase());
+    if(existingIdx > -1){
+      const entry = state.recent.splice(existingIdx,1)[0];
+      entry.count += 1;
+      state.recent.unshift(entry);
+    } else {
+      state.recent.unshift({ name, count: 1 });
+    }
+    state.recent = state.recent.slice(0, MAX_RECENT);
+    renderRecent();
+    saveState();
+  }
+
+  function renderRecent(){
+    recentList.innerHTML = '';
+
+    if(state.recent.length === 0){
+      const empty = document.createElement('li');
+      empty.className = 'recent-empty';
+      empty.textContent = 'Belum ada album yang diputar sesi ini.';
+      recentList.appendChild(empty);
+      return;
+    }
+
+    state.recent.forEach(entry => {
+      const li = document.createElement('li');
+      li.className = 'recent-item';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'recent-name';
+      nameSpan.textContent = entry.name; // textContent -> tidak pernah diparsing sebagai HTML
+
+      const countSpan = document.createElement('span');
+      countSpan.className = 'recent-count';
+      countSpan.textContent = '×' + entry.count;
+
+      li.appendChild(nameSpan);
+      li.appendChild(countSpan);
+      recentList.appendChild(li);
+    });
+  }
+
+  function setSideVisual(side){
+    if(side === 'B'){ flipCard.classList.add('flipped'); }
+    else { flipCard.classList.remove('flipped'); }
+  }
+
+  function beginPlay(){
+    const name = albumInput.value.trim();
+    if(!name){
+      albumInput.focus();
+      albumInput.style.borderColor = 'var(--rust)';
+      setTimeout(()=>{ albumInput.style.borderColor = ''; }, 700);
+      return;
+    }
+    state.playing = true;
+    state.side = 'A';
+    state.startTimestamp = Date.now();
+    setSideVisual('A');
+
+    albumInput.value = name;
+    albumInput.disabled = true;
+    playBtn.disabled = true;
+    flipBtn.disabled = false;
+    finishBtn.disabled = false;
+
+    platter.classList.add('spinning');
+    tonearm.classList.add('down');
+
+    logPlay(name); // logPlay() sudah memanggil saveState()
+    startTimer();
+    saveState();
+  }
+
+  function flipSide(){
+    if(!state.playing) return;
+    state.side = state.side === 'A' ? 'B' : 'A';
+    state.startTimestamp = Date.now();
+    setSideVisual(state.side);
+    logPlay(albumInput.value.trim()); // logPlay() sudah memanggil saveState()
+    startTimer();
+    saveState();
+  }
+
+  function finishPlay(){
+    stopTimer();
+    state.playing = false;
+    state.startTimestamp = null;
+    state.side = 'A';
+
+    albumInput.disabled = false;
+    albumInput.value = '';
+    playBtn.disabled = false;
+    flipBtn.disabled = true;
+    finishBtn.disabled = true;
+
+    timerText.textContent = '0:00';
+    setSideVisual('A');
+    platter.classList.remove('spinning');
+    tonearm.classList.remove('down');
+    albumInput.focus();
+    saveState();
+  }
+
+  playBtn.addEventListener('click', beginPlay);
+  flipBtn.addEventListener('click', flipSide);
+  finishBtn.addEventListener('click', finishPlay);
+  albumInput.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' && !state.playing) beginPlay();
+  });
+
+  loadState();
+  renderRecent();
+</script>
+</body>
+</html>
